@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 )
 
 type Player struct {
@@ -50,6 +51,7 @@ type Player struct {
 	PoiTimer                   int    `json:"poiTimer"`
 	FactionWasSet              bool   `json:"factionWasSet"`
 	Name                       string `json:"name"`
+	IsBot                      bool
 }
 type PlayerStates struct {
 	Players map[string]Player `json:"players"`
@@ -63,10 +65,12 @@ type MarketOrder struct {
 	PlayerID     int     `json:"playerID"`
 	ResourceType int     `json:"resourceType"`
 	OrderID      int     `json:"orderID"`
+	NationName   string
+	IsBot        bool
 }
 
 type MarketData struct {
-	Order []MarketOrder
+	Orders []MarketOrder
 }
 
 func (m *MarketData) UnmarshalJSON(data []byte) error {
@@ -74,7 +78,7 @@ func (m *MarketData) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	return json.Unmarshal(raw[1], &m.Order)
+	return json.Unmarshal(raw[1], &m.Orders)
 }
 
 type MarketStates struct {
@@ -116,5 +120,18 @@ func main() {
 		fmt.Println("Failed to decode json, ", err.Error())
 	}
 
-	fmt.Println(res.Result.States.PState.Players["71"])
+	players := res.Result.States.PState.Players
+	for _, p := range players {
+		p.IsBot = p.LastLogin == 0
+		players[strconv.Itoa(p.PlayerID)] = p
+	}
+	for _, b := range res.Result.States.MState.Bids {
+		for i, o := range b.Orders {
+			player := players[strconv.Itoa(o.PlayerID)]
+			b.Orders[i].NationName = player.NationName
+			b.Orders[i].IsBot = player.IsBot
+		}
+	}
+
+	fmt.Printf("%#v\n", res.Result.States.MState.Bids)
 }
